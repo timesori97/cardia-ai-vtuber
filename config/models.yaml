@@ -1,0 +1,104 @@
+# Model routing + cadence for the streaming brain.
+# Model aliases resolve to the current generation via Claude Code (`--model` flag).
+# Full model names also work if pinning is ever needed.
+
+# max_thinking_tokens maps to the MAX_THINKING_TOKENS env var per call.
+# Hidden thinking was the latency killer: haiku spent 1.8k-4.4k thinking
+# tokens (22-44s) on 25-word one-liners. 0 = answer immediately.
+routes:
+  game_decision:
+    # HYBRID (see orchestrator.pick_game_model): `model` runs the decisions
+    # that shape the run — card rewards, shops, rest sites, map routing,
+    # events, elite/boss fights, and any turn that can kill us. `fast_model`
+    # runs routine combat turns, which are ~70% of all calls. Same judgment
+    # where it matters, roughly double the stream time per usage window.
+    # fast_model is ALSO the automatic downgrade if the big model keeps
+    # timing out.
+    # warm: see balatro_decision below. Applies to the thinking-0 calls only,
+    # which is every menu screen and every routine combat turn; elite/boss
+    # turns still get a fresh process because their thinking budget differs.
+    warm: true
+    model: opus
+    fast_model: sonnet
+    prompt: prompts/game_decision.md
+    timeout_s: 90          # Opus needs room; a timeout IS the on-screen freeze
+    max_thinking_tokens: 0
+  balatro_decision:
+    # Same hybrid idea as game_decision: the big model for the screens that
+    # shape a run (shop, blind selection), the fast one for routine hands.
+    # Thinking stays at 0 on EVERY Balatro screen — measured on shops, a 512
+    # budget cost 22.4s vs 10.1s and produced worse plans (it stopped after
+    # the buys instead of closing the screen, forcing extra round trips).
+    # Forced screens (round payout, boss blind, an unaffordable shop) never
+    # reach the brain at all — see orchestrator._balatro_instant.
+    # warm: reuse a live CLI process instead of booting one per decision.
+    # Measured live: the model answers in 4-10s but a cold call cost 20-50s,
+    # because ~60-85% of every call was process startup on this 2-core box.
+    warm: true
+    model: opus
+    fast_model: sonnet
+    prompt: prompts/balatro_decision.md
+    timeout_s: 90
+    max_thinking_tokens: 0
+  balatro_run_start:
+    # Once per run (~every 15 min): which deck and which stake to play. This
+    # shapes the whole run and decides what gets unlocked next, so Opus. It is
+    # skipped entirely while only one deck/stake combination is unlocked.
+    model: opus
+    fast_model: sonnet
+    prompt: prompts/balatro_run_start.md
+    timeout_s: 60
+    max_thinking_tokens: 0
+  chat_react:
+    model: haiku           # high frequency, must be cheap and fast
+    prompt: prompts/chat_react.md
+    timeout_s: 50          # live measurement: replies take 30-45s under full
+                           # stream load; a slow reply beats a dropped one
+    max_thinking_tokens: 0
+  donation_react:
+    model: haiku           # must feel instant
+    prompt: prompts/donation_react.md
+    timeout_s: 15
+    max_thinking_tokens: 0
+  idle_commentary:
+    model: haiku
+    prompt: prompts/idle_commentary.md
+    timeout_s: 30          # headroom for CPU contention while live
+    max_thinking_tokens: 0
+  safety_classifier:
+    model: haiku           # ALLOW / BLOCK / DISTRESS classifier, see safety.md
+    prompt: null           # inline prompt defined in safety.md
+    timeout_s: 25          # headroom for CPU contention while live
+    max_thinking_tokens: 0
+  lessons:
+    # Post-run death analysis -> lesson notes the game brain reads every turn.
+    # Opus on purpose: once per run (~hourly), latency irrelevant, and sharper
+    # lessons compound into every future decision. The one place Opus pays off.
+    model: opus
+    prompt: null           # inline prompt in brain.distill_lessons
+    timeout_s: 90
+    max_thinking_tokens: 1024
+
+cli:
+  # Invocation flags live in brain.py (validated against CLI 2.1.214):
+  # prompt via stdin; persona via --system-prompt-file; --no-session-persistence;
+  # --strict-mcp-config; --tools ""; per-route --effort from `effort:` above.
+  base_flags: ["--output-format", "json", "--max-turns", "1"]
+
+cadence:
+  chat_batch_interval_s: 25      # collect chat, react at most this often
+  idle_commentary_interval_s: 90 # only when speech queue is empty; keep rare —
+                                 # every commentary is a CLI process the 2-core
+                                 # CPU can't spare while the game+OBS run
+  recent_lines_window: 12        # lines passed as anti-repetition context
+  stale_chat_drop_s: 60          # chat older than this is never answered
+
+queue:
+  priority: [donation, chat, commentary]   # game loop runs independently
+  max_speech_queue: 3            # drop lowest-priority items beyond this
+  never_interrupt_playback: true
+
+limits:
+  # Subscription usage windows are finite. Start with 1-2 hour streams,
+  # watch for rate-limit errors in brain.py logs, and lengthen gradually.
+  recommended_max_stream_hours_initial: 2

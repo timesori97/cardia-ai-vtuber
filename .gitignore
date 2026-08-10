@@ -1,0 +1,50 @@
+# ---------------------------------------------------------------------------
+# Secrets — never commit
+# ---------------------------------------------------------------------------
+.env
+# OBS profiles hold the live Twitch/YouTube stream keys and the obs-websocket
+# password. tools/ is excluded wholesale below, but list these explicitly so
+# the intent survives any future change to the rules underneath.
+tools/obs/config/obs-studio/basic/profiles/*/service.json
+tools/obs/config/obs-studio/plugin_config/obs-websocket/config.json
+
+# ---------------------------------------------------------------------------
+# Third-party binaries. These are downloaded, not written here — OBS portable,
+# veadotube, Piper TTS with its voice models, the Claude CLI, a uv-managed
+# Python, spirecomm. ~1.8 GB, and none of it is this project's work.
+# The exceptions below keep the scripts that ARE.
+# ---------------------------------------------------------------------------
+tools/*
+!tools/*.py
+!tools/*.ps1
+!tools/balatro-patch/
+tools/balatro-patch/*.orig
+tools/balatro-patch/*.new
+tools/__pycache__/
+
+# ---------------------------------------------------------------------------
+# Runtime output
+# ---------------------------------------------------------------------------
+logs/
+recordings/
+__pycache__/
+*.pyc
+
+# ---------------------------------------------------------------------------
+# Avatar artwork — generated character art, kept out of the repo on purpose.
+# The expression-switching code and its tests are included; only the images
+# are not.
+# ---------------------------------------------------------------------------
+avatar/
+avatar_new/
+
+# Local scratch
+*.bak
+*.tmp
+
+# Stray folders another program left in here — not part of this project
+settings/
+ready/
+prepare/
+lock/
+files/

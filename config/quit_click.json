@@ -1,0 +1,7 @@
+{
+  "_comment": "In-game Save & Quit click path, measured on 2026-07-26 against a 1280x720 client area. Fractions of the game window's client rect, so window position does not matter. Re-measure if the game resolution changes.",
+  "gear": [0.977, 0.031],
+  "save_and_quit": [0.80, 0.874],
+  "confirm_yes": [0.441, 0.639],
+  "menu_quit": [0.075, 0.889]
+}
